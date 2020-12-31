@@ -12,4 +12,79 @@
         <tag>随笔</tag>
       </tags>
   </entry>
+  <entry>
+    <title>使用Microk8s快速部署kubernetes</title>
+    <url>/2020/12/microk8s-deploy/</url>
+    <content><![CDATA[<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>​        <a href="https://microk8s.io/">Microk8s</a> 是本地部署 Kubernetes 集群的 click-and-run 方案，最初由 Ubuntu 的发布者 Canonical 开发。不同于Minikube的是，它使用 <a href="https://snapcraft.io/">snap</a> 包进行部署，而不是在本地启动虚拟机来进行部署。从跨平台的角度来考虑，Minikube确实可以支持更多的平台，而Microk8s只支持少数几个特定平台。但是从资源占用的角度来考虑，由于不需要使用虚拟机，Microk8s使得你可以留更多的物力资源供你的应用使用。同时，令人惊喜的是，Microk8s目前已经支持用多个机器来构建多节点的k8s集群了。</p>
+<p>​        总的来说，MicroK8s 提供了一种快速简易的方法，使得少量的计算机和虚拟机变成一个多节点的 Kubernetes集群。</p>
+<p>​        本文的后面部分，我们将完成下面的事项：</p>
+<ul>
+<li>使用Microk8s在本地启动一个单节点k8s集群</li>
+<li>启动microk8s自带的几个插件，包括DNS和Dashboard</li>
+<li>运行一个nginx应用查看效果</li>
+</ul>
+<h2 id="要求"><a href="#要求" class="headerlink" title="要求"></a>要求</h2><ol>
+<li>一台安装了支持<code>snaps</code>的Linux发行版的实验机</li>
+<li>机器上已经预先安装好了Docker</li>
+<li>简单了解过kubernetes，会简单使用几个kubectl命令</li>
+<li>了解镜像、容器等概念</li>
+</ol>
+<h2 id="reference"><a href="#reference" class="headerlink" title="reference"></a>reference</h2><ul>
+<li><a href="https://kubernetes.io/blog/2019/11/26/running-kubernetes-locally-on-linux-with-microk8s/">使用 Microk8s 在 Linux 上本地运行 Kubernetes</a></li>
+<li><a href="https://microk8s.io/docs">Microk8s Get Started</a></li>
+<li><a href="https://ubuntu.com/tutorials/install-a-local-kubernetes-with-microk8s?&_ga=2.165177596.212447609.1609404066-762578861.1609404066#1-overview">Microk8s Tutorial - install a local kubernetes with microk8s</a></li>
+</ul>
+<h2 id="正文"><a href="#正文" class="headerlink" title="正文"></a>正文</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p>Microk8s的安装命令非常简洁，只需要运行如下命令：</p>
+<figure class="highlight sh"><table><tr><td class="code"><pre><span class="line">sudo snap install microk8s --classic</span><br></pre></td></tr></table></figure>
+<p>该命令会自动安装当前的稳定版本，我安装的时候稳定版本是1.20，在安装的时候可以看到这样的输出：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta"> $</span><span class="bash">  sudo snap install microk8s --classic</span></span><br><span class="line">Download snap &quot;microk8s&quot; (1864) from channel &quot;1.20/stable&quot;                             25%  218kB/s 12.5m</span><br></pre></td></tr></table></figure>
+<p>当看到类似这样的输出的时候，就说明安装完成了。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">microk8s (1.20/stable) v1.20.0 from Canonical✓ installed</span><br></pre></td></tr></table></figure>
+<p>接着让我们使用<code>kubectl</code>命令来检查我们安装的集群状态：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">sudo microk8s.kubectl get nodes</span><br></pre></td></tr></table></figure>
+<p>正常情况下应该看到的是这样的输出，显示我们的集群中有一个k8s工作节点，他的当前状态为<code>Ready</code>。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">NAME                 STATUS     ROLES    AGE     VERSION</span><br><span class="line">irving-workstation   Ready   &lt;none&gt;   3m27s   v1.20.0-37+7ab055a22f5440</span><br></pre></td></tr></table></figure>
+<p>但是如果你使用的机器不能够科学上网的话，可能节点的状态会为<code>NotReady</code>。接下来我会先介绍如何简化kubectl命令使用，接着介绍节点<code>NotReady</code>情况下要怎么修复。</p>
+<h4 id="简化kubectl命令"><a href="#简化kubectl命令" class="headerlink" title="简化kubectl命令"></a>简化kubectl命令</h4><p>我们首先解决必须要<code>sudo</code>才能执行microk8s命令的问题。</p>
+<p>运行下面的命令，将你当前的用户加到 ‘microk8s’ 用户组内：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">sudo usermod -a -G microk8s $USER</span><br><span class="line">sudo chown -f -R $USER ~/.kube</span><br><span class="line">su $USER</span><br></pre></td></tr></table></figure>
+<p>然后解决每次<code>kubectl</code>命令前面都必须要加上microk8s的问题，我们给<code>microk8s.kubectl</code>取别名为<code>mkubectl</code>:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">sudo snap alias microk8s.kubectl mkubectl</span><br></pre></td></tr></table></figure>
+<p>现在你可以简单用下面的命令再次查看集群中节点的状态了</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">mkubectl get nodes</span><br></pre></td></tr></table></figure>
+<h4 id="解决科学上网问题"><a href="#解决科学上网问题" class="headerlink" title="解决科学上网问题"></a>解决科学上网问题</h4><p>该问题的原因是由于谷歌服务器被墙，导致有一些镜像拉不到。我们通过下面的几条命令就可以看到为什么集群的状态不健康了：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> mkubectl get pods -n kube-system</span></span><br><span class="line">NAME                                      READY   STATUS     RESTARTS   AGE</span><br><span class="line">calico-kube-controllers-847c8c99d-8shsv   0/1     Pending    0          20m</span><br><span class="line">calico-node-fmmrr                         0/1     Init:0/3   0          20m</span><br><span class="line"></span><br><span class="line"><span class="meta">$</span><span class="bash"> mkubectl describe pod calico-node-fmmrr -n kube-system</span></span><br><span class="line">......</span><br><span class="line">......</span><br><span class="line">......</span><br><span class="line">......</span><br><span class="line">Events:</span><br><span class="line">  Type     Reason                  Age                   From               Message</span><br><span class="line">  ----     ------                  ----                  ----               -------</span><br><span class="line">  Normal   Scheduled               20m                   default-scheduler  Successfully assigned kube-system/calico-node-fmmrr to irving-workstation</span><br><span class="line">  Warning  FailedCreatePodSandBox  10m (x15 over 20m)    kubelet            Failed to create pod sandbox: rpc error: code = Unknown desc = failed to get sandbox image &quot;k8s.gcr.io/pause:3.1&quot;: failed to pull image &quot;k8s.gcr.io/pause:3.1&quot;: failed to pull and unpack image &quot;k8s.gcr.io/pause:3.1&quot;: failed to resolve reference &quot;k8s.gcr.io/pause:3.1&quot;: failed to do request: Head &quot;https://k8s.gcr.io/v2/pause/manifests/3.1&quot;: dial tcp 108.177.125.82:443: i/o timeout</span><br><span class="line">  Warning  FailedCreatePodSandBox  66s (x13 over 9m38s)  kubelet            Failed to create pod sandbox: rpc error: code = Unknown desc = failed to get sandbox image &quot;k8s.gcr.io/pause:3.1&quot;: failed to pull image &quot;k8s.gcr.io/pause:3.1&quot;: failed to pull and unpack image &quot;k8s.gcr.io/pause:3.1&quot;: failed to resolve reference &quot;k8s.gcr.io/pause:3.1&quot;: failed to do request: Head &quot;https://k8s.gcr.io/v2/pause/manifests/3.1&quot;: dial tcp 108.177.97.82:443: i/o timeout</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>我们只需要从别的地方下载到所需要的镜像(这里是<code>k8s.gcr.io/pause:3.1</code>)，保证运行在我们机器上的Pod可以正常获取镜像就可以了。具体怎么解决可以参考其他文章，我个人使用的是<a href="https://cr.console.aliyun.com/cn-beijing/instances/mirrors">阿里云镜像加速器</a>。</p>
+<p>当你本地Docker镜像仓库中有了<code>k8s.gcr.io/pause:3.1</code>这个镜像之后，Pod却仍然无法获取镜像，这是怎么回事？</p>
+<p>原来Microk8s使用的CRE是containerd，我们需要再将Docker镜像仓库里的镜像放到Microk8s使用的镜像仓库里去：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">docker save k8s.gcr.io/pause:3.1 &gt; pause.tar</span><br><span class="line">microk8s ctr image import pause.tar</span><br></pre></td></tr></table></figure>
+<p>这下再看pod状态已经都正常了：</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">NAME                                      READY   STATUS    RESTARTS   AGE</span><br><span class="line">calico-node-fmmrr                         1/1     Running   1          60m</span><br><span class="line">calico-kube-controllers-847c8c99d-8shsv   1/1     Running   0          60m</span><br></pre></td></tr></table></figure>
+<p>后面的使用过程中，我们仍然会多次遇到镜像拉取不到的问题，都需要用这种方法解决。</p>
+<h3 id="启用插件"><a href="#启用插件" class="headerlink" title="启用插件"></a>启用插件</h3><p>使用 MicroK8s 其中最大的好处之一事实上是也支持各种各样的插件和扩展。更重要的是它们是开箱即用的，用户仅仅需要启动它们。通过运行 <code>microk8s.status</code> 命令检查出扩展的完整列表。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> microk8s status</span></span><br><span class="line">microk8s is running</span><br><span class="line">high-availability: no</span><br><span class="line">  datastore master nodes: 127.0.0.1:19001</span><br><span class="line">  datastore standby nodes: none</span><br><span class="line">addons:</span><br><span class="line">  enabled:</span><br><span class="line">    ha-cluster           # Configure high availability on the current node</span><br><span class="line">  disabled:</span><br><span class="line">    ambassador           # Ambassador API Gateway and Ingress</span><br><span class="line">    cilium               # SDN, fast with full network policy</span><br><span class="line">    dashboard            # The Kubernetes dashboard</span><br><span class="line">    dns                  # CoreDNS</span><br><span class="line">    fluentd              # Elasticsearch-Fluentd-Kibana logging and monitoring</span><br><span class="line">    gpu                  # Automatic enablement of Nvidia CUDA</span><br><span class="line">    helm                 # Helm 2 - the package manager for Kubernetes</span><br><span class="line">    helm3                # Helm 3 - Kubernetes package manager</span><br><span class="line">    host-access          # Allow Pods connecting to Host services smoothly</span><br><span class="line">    ingress              # Ingress controller for external access</span><br><span class="line">    istio                # Core Istio service mesh services</span><br><span class="line">    jaeger               # Kubernetes Jaeger operator with its simple config</span><br><span class="line">    keda                 # Kubernetes-based Event Driven Autoscaling</span><br><span class="line">    knative              # The Knative framework on Kubernetes.</span><br><span class="line">    kubeflow             # Kubeflow for easy ML deployments</span><br><span class="line">    linkerd              # Linkerd is a service mesh for Kubernetes and other frameworks</span><br><span class="line">    metallb              # Loadbalancer for your Kubernetes cluster</span><br><span class="line">    metrics-server       # K8s Metrics Server for API access to service metrics</span><br><span class="line">    multus               # Multus CNI enables attaching multiple network interfaces to pods</span><br><span class="line">    portainer            # Portainer UI for your Kubernetes cluster</span><br><span class="line">    prometheus           # Prometheus operator for monitoring and logging</span><br><span class="line">    rbac                 # Role-Based Access Control for authorisation</span><br><span class="line">    registry             # Private image registry exposed on localhost:32000</span><br><span class="line">    storage              # Storage class; allocates storage from host directory</span><br><span class="line">    traefik              # traefik Ingress controller for external access</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<h4 id="开启DNS"><a href="#开启DNS" class="headerlink" title="开启DNS"></a>开启DNS</h4><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">microk8s enable dns</span><br></pre></td></tr></table></figure>
+<p>开启过后kube-system名字空间下面会多一个coredns的Pod。</p>
+<h4 id="开启Dashboard"><a href="#开启Dashboard" class="headerlink" title="开启Dashboard"></a>开启Dashboard</h4><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">microk8s enable dashboard</span><br></pre></td></tr></table></figure>
+<p>获取Token:</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">token=$(microk8s kubectl -n kube-system get secret | grep default-token | cut -d &quot; &quot; -f1)</span><br><span class="line">microk8s kubectl -n kube-system describe secret $token</span><br></pre></td></tr></table></figure>
+<p>获取dashboard的ClusterIP</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ microk8s kubectl get svc -n kube-system</span><br><span class="line">NAME                        TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                  AGE</span><br><span class="line">kubernetes-dashboard        ClusterIP   10.152.183.103   &lt;none&gt;        443&#x2F;TCP                  17m</span><br></pre></td></tr></table></figure>
+<p>访问页面 https://{ClusterIP}:443，使用刚刚获取到的Token登录，就可以看到如下画面了。</p>
+<p><img data-src="/images/posts/microk8s-deploy/dashboard.png"></p>
+<h3 id="运行应用"><a href="#运行应用" class="headerlink" title="运行应用"></a>运行应用</h3><p>我们来简单运行一个Nginx作为示例应用</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">kubectl create deployment nginx --image=nginx</span><br></pre></td></tr></table></figure>
+<p>来查看下效果</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">kubectl get deployments</span><br><span class="line">kubectl get pods -o wide</span><br><span class="line"><span class="meta">#</span><span class="bash">这里可以看到Pod IP，可以用于后面访问</span></span><br></pre></td></tr></table></figure>
+<p>用浏览器访问http://{Pod IP}:80就可以看到nginx的默认界面了。</p>
+<p><img data-src="/images/posts/microk8s-deploy/nginx.png"></p>
+]]></content>
+      <categories>
+        <category>容器云原生</category>
+      </categories>
+      <tags>
+        <tag>k8s</tag>
+        <tag>Microk8s</tag>
+      </tags>
+  </entry>
 </search>
